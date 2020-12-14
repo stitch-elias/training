@@ -1,0 +1,5 @@
+print("你好吗？",end='')
+print("python")
+print("张三","李四","王五")
+print("\"\"")
+print("\\")
