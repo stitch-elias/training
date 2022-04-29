@@ -1,0 +1,6 @@
+import cv2
+import numpy as np
+def f(x):
+    img = x[0].copy()
+    equ = cv2.equalizeHist(img)
+    setResult('img','HeilsImage',equ)
