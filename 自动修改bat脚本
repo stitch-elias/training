@@ -1,0 +1,51 @@
+@echo off & setlocal ENABLEDELAYEDEXPANSION
+chcp 65001
+set /p path=filepath:
+
+set BakFileName=
+set count=0
+for /f "delims=" %%A in ('dir/ad/s/b %path%') do (
+set list[!count!]=%%A
+set /a count=!count!+1
+)
+
+set /a index=!count!-1
+
+for /l %%a in (0,1,!index!) do (
+set num=0
+set "b=!list[%%a]!"
+for /l %%b in (0,1,!index!) do (
+set "a=!list[%%b]!"
+if !a!==!b! ( set nun=0 ) else ( 
+for /f %%c in ("!b!=repeat") do (set rp=!a:%%c!)
+set rp=!rp:~0,6!
+if !rp!==repeat (set /a num=!num!+1)
+))
+if !num!==0 (set "BakFileName=!BakFileName!,"!b:%path%\=!"")
+)
+set "BakFileName=!BakFileName:~1!"
+echo !BakFileName!
+
+
+for /f "delims=[|] tokens=2" %%i in ('type path_searcher.py') do (
+set "indexname=%%i"
+)
+
+for /f "delims=() tokens=2" %%i in ('type path_searcher.py') do (
+set "pathname=%%i" 
+)
+
+set "BakFileName=%BakFileName:\=/%"
+set "path=%path:\=/%"
+
+for /f "delims=" %%b in ('type path_searcher.py') do (
+set "str=%%b"
+set "str=!str:%indexname%=%BakFileName%!"
+set "str=!str:%pathname%="%path%",val!"
+echo !str! >>$
+)
+move path_searcher.py path_searcher_.py
+move $ path_searcher.py
+
+echo succeed
+pause
