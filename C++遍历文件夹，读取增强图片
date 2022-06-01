@@ -1,0 +1,76 @@
+#include<iostream>
+#include<string>
+#include<io.h>
+#include<vector>
+#include<opencv.hpp>
+#include <cstdlib>
+using namespace std;
+
+
+vector<_finddata_t> getFiles1(string path, string suffix)
+{
+	_finddata_t file_info;
+
+	string filepath = path + suffix;
+	vector<_finddata_t> filedata;
+
+	intptr_t handle = _findfirst(filepath.c_str(), &file_info);
+	int file_num = 0;
+	if (handle == -1)
+		return filedata;
+	do
+	{
+		if (strcmp(file_info.name, "..") != 0 && strcmp(file_info.name, ".") != 0)
+			filedata.push_back(file_info);
+		file_num++;
+	} while (!_findnext(handle, &file_info));
+
+	_findclose(handle);
+	return filedata;
+}
+
+int main(int argc, char* argv[])
+{
+
+	vector<_finddata_t> filedata = getFiles1("C:/Users/Administrator/Desktop/未涂胶", "/*");
+	
+	vector<string> path;
+	for (auto iter = filedata.begin(); iter != filedata.end(); iter++)
+	{
+		if ((*iter).attrib == _A_SUBDIR)
+			path.push_back((*iter).name);
+	}
+
+	vector<cv::Mat> images;
+	for (auto iter = path.begin(); iter != path.end(); iter++)
+		images.push_back(cv::imread("C:/Users/Administrator/Desktop/未涂胶/" + (*iter) + "/capture1/gray.bmp",0));
+	
+	cv::Mat t_mat = cv::Mat::zeros(2, 3, CV_32FC1);
+	t_mat.at<float>(0, 0) = 1;
+	t_mat.at<float>(1, 1) = 1;
+	cv::Mat dst;
+	cv::Mat src1;
+
+	int index = 0;
+
+	for (auto iter = images.begin(); iter != images.end(); iter++)
+	{
+		cv::Mat src = *(iter);
+
+		int px = 250 - rand() % 500;
+		int py = 250 - rand() % 500;
+
+		double angle = 3 - rand() % 6;
+		cv::Point2f center(static_cast<float>(src.cols / 2.0), static_cast<float>(src.rows / 2.0));
+		cv::Mat rot_mat = cv::getRotationMatrix2D(center, angle, 1.0);
+		cv::warpAffine(src, src1, rot_mat, src.size());
+
+		t_mat.at<float>(0, 2) = px;
+		t_mat.at<float>(1, 2) = py;
+
+		cv::warpAffine(src1, dst, t_mat, src.size());
+		cv::imwrite("C:/Users/Administrator/Desktop/平移+旋转/" + to_string(index++) + ".bmp", dst);
+	}
+
+	return 0;
+}
