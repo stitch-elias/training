@@ -15,16 +15,19 @@ class AdaptiveAvgPool(nn.Module):
         self.out_s = out_s
         self.type = type
     def forward(self,x):
-        in_size = x.shape[1:]
+        in_size = torch.tensor(x.shape[2:])
         out_size = torch.tensor(self.out_s)
 
-        str = torch.floor_(in_size/out_size)
-        kernel = in_size-(out_size-1)*str
+        str_size = torch.floor_(in_size/out_size)
+        kernel_size = in_size-(out_size-1)*str_size
+
+        stri = (int(str_size[0].item()),int(str_size[1].item()))
+        kernel = (int(kernel_size[0].item()),int(kernel_size[1].item()))
 
         if self.type == 'Avg':
-            pool = nn.AvgPool2d(kernel_size=kernel,stride=(kernel[0].item(),kernel[1].item()))
+            pool = nn.AvgPool2d(kernel_size=kernel,stride=stri)
         else:
-            pool = nn.MaxPool2d(kernel_size=kernel,stride=(kernel[0].item(),kernel[1].item()))
+            pool = nn.MaxPool2d(kernel_size=kernel,stride=stri)
         return pool(x)
 
 class SE(nn.Module):
@@ -52,14 +55,14 @@ class Conv_bn_mish(nn.Module):
         self.mish = Mish()
 
         if self.is_se:
-            self.se = SE(out_c,16)
+            self.se = SE(out_c,2)
 
         if self.is_shortcat:
             self.short_cat = nn.Sequential()
 
             if str != 1:
                 self.short_cut = nn.Sequential(
-                    nn.Conv2d(in_c, out_c, 1, stride=str, padding=0, bias=False),
+                    nn.Conv2d(in_c, out_c, 1, stride=str, padding=0, bias=bias),
                     nn.BatchNorm2d(out_c)
                 )
 
@@ -85,7 +88,8 @@ class res_basic_block(nn.Module):
                               bias=bias)
         self.Conv2 = nn.Conv2d(in_channels=out_c, out_channels=out_c, kernel_size=kernel, stride=1, padding=pad,
                               bias=bias)
-        self.bn = nn.BatchNorm2d(out_c)
+        self.bn1 = nn.BatchNorm2d(out_c)
+        self.bn2 = nn.BatchNorm2d(out_c)
         self.mish = Mish()
 
         if self.is_se:
@@ -96,17 +100,17 @@ class res_basic_block(nn.Module):
 
         if str != 1:
             self.short_cut = nn.Sequential(
-                nn.Conv2d(in_c, out_c, 1, stride=str, padding=0, bias=False),
-                nn.BatchNorm2d(out_c)
+                nn.Conv2d(in_c, out_c, 1, stride=str, padding=0, bias=bias),
+                nn.BatchNorm2d(out_c,momentum=1)
             )
 
     def forward(self, x):
         out = self.Conv1(x)
-        out = self.bn(out)
+        out = self.bn1(out)
         out = self.mish(out)
 
         out = self.Conv2(out)
-        out = self.bn(out)
+        out = self.bn2(out)
 
         if self.is_se:
             coefficient = self.se(out)
@@ -124,7 +128,8 @@ class res_bottle_neck(nn.Module):
         self.conv2 = nn.Conv2d(out_channels//4, out_channels//4, 3, stride=strides, padding=1, bias=bias)
         self.conv3 = nn.Conv2d(out_channels//4, out_channels, 1, stride=1, padding=0, bias=bias)
         self.bn1 = nn.BatchNorm2d(out_channels//4)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.bn2 = nn.BatchNorm2d(out_channels//4)
+        self.bn3 = nn.BatchNorm2d(out_channels)
         if self.is_se:
             self.se = SE(out_channels, 16)
 
@@ -138,10 +143,10 @@ class res_bottle_neck(nn.Module):
         out = self.bn1(out)
         out = self.mish(out)
         out = self.conv2(out)
-        out = self.bn1(out)
+        out = self.bn2(out)
         out = self.mish(out)
         out = self.conv3(out)
-        out = self.bn2(out)
+        out = self.bn3(out)
         if self.is_se:
             coefficient = self.se(out)
             out *= coefficient
@@ -188,7 +193,7 @@ class attention(nn.Module):
         self.scale = dim_head ** -0.5
 
         self.attend = nn.Softmax(dim=-1)
-        self.to_qkv = nn.Linear(dim,inner_dim*3,bias=False)
+        self.to_qkv = nn.Linear(dim,inner_dim*3,bias=True)
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim,dim),
@@ -214,7 +219,7 @@ class feedforward(nn.Module):
         super(feedforward, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(dim,hidden_dim),
-            nn.GELU(),
+            Mish(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim,dim),
             nn.Dropout(dropout)
@@ -285,7 +290,7 @@ class vit(nn.Module):
 
         x = torch.cat((cls_tokens, x), dim=1)  # 将cls_token拼接到patch token中去       (b, 65, dim)
         x += self.pos_embedding[:, :(n + 1)]  # 加位置嵌入（直接加）      (b, 65, dim)
-        x = self.dropout(x)
+        # x = self.dropout(x)
 
         x = self.transformer(x)  # (b, 65, dim)
 
@@ -298,16 +303,21 @@ class vit(nn.Module):
     def pair(self,t):
         return t if isinstance(t, tuple) else (t, t)
 class trt_vit_block(nn.Module):
-    def __init__(self,c_in,c_out,r,dim_head):
+    def __init__(self,c_in,c_out,r,dim_head,stride=2,is_se=False,dropout=0.):
         super(trt_vit_block, self).__init__()
-        self.pool = nn.AvgPool2d(kernel_size=3,stride=2,padding=1)
+        self.pool = nn.AvgPool2d(kernel_size=3,stride=stride,padding=1)
         self.conv = nn.Conv2d(c_in,int(c_out*r),kernel_size=1,stride=1)
 
-        self.tran = transformerBlock(int(c_out*r),depth=1,heads=int(c_out*r)//dim_head,dim_head=dim_head,mlp_dim=(c_out-int(c_out*r)))
-        self.bottle = res_bottle_neck((c_out-int(c_out*r)),c_out,1)
+        self.tran = transformerBlock(int(c_out*r),depth=1,heads=int(c_out*r)//dim_head,dim_head=dim_head,mlp_dim=(c_out-int(c_out*r)),dropout=dropout)
+        self.bottle = res_bottle_neck((c_out-int(c_out*r)),c_out,1,is_se=is_se,bias=True)
+
+        self.stride = stride
 
     def forward(self,x):
-        out = self.pool(x)
+        if self.stride == 1 :
+            out = x
+        else:
+            out = self.pool(x)
         out = self.conv(out)
         h,w = out.shape[-2:]
         out = torch.transpose(out.reshape(out.shape[0],out.shape[1],-1),dim0=1,dim1=2)
@@ -317,64 +327,61 @@ class trt_vit_block(nn.Module):
         out = self.bottle(out)
         return out
 
+class crnn_att(nn.Module):
+    def __init__(self,dim, heads, dim_head, lendim, clsdim, dropout=0.):
+        super(crnn_att, self).__init__()
+        self.attn = PreNorm(dim, attention(dim, heads=heads, dim_head=dim_head, dropout=dropout))
+        self.num = nn.Linear(dim,lendim)
+        self.cla = nn.Linear(dim_head,clsdim)
+
+    def forward(self,x):
+        out = torch.transpose(x.reshape(x.shape[0],-1,x.shape[-1]),dim0=1,dim1=2)
+        out = self.attn(out)
+        out = self.num(out)
+        out = torch.transpose(out, dim0=1, dim1=2)
+        out = self.cla(out)
+        out = torch.transpose(out, dim0=0, dim1=1)
+        return out
+
+
 class trt_VIT(nn.Module):
     def __init__(self,classes):
         super(trt_VIT, self).__init__()
-        self.stem = StemBlock(3,32)
-        self.stage1 = res_basic_block(32,64,3,2,1)
+        self.stem = StemBlock(1,32)
+        self.stage1 = res_basic_block(32,64,3,2,1,bias=True)
         self.stage2 = nn.Sequential(
-            res_bottle_neck(64,64,1),
-            res_bottle_neck(64, 128, 2),
+            res_bottle_neck(64,64,1,bias=True),
+            res_bottle_neck(64, 128, 2,bias=True),
         )
         self.stage3 = nn.Sequential(
-            res_bottle_neck(128,128,1),
-            res_bottle_neck(128, 128, 1),
-            res_bottle_neck(128, 256, 1),
-            res_bottle_neck(256, 256, 2),
+            res_bottle_neck(128,128,1,bias=True),
+            res_bottle_neck(128, 128, 1,bias=True),
+            res_bottle_neck(128, 256, 1,bias=True),
+            res_bottle_neck(256, 256, 2,bias=True),
         )
-        self.stage4 = nn.Sequential(
-            res_bottle_neck(256,256,1),
-            res_bottle_neck(256, 256, 1),
-            res_bottle_neck(256, 512, 1),
-            res_bottle_neck(512, 512, 1),
-            res_bottle_neck(512, 512, 2),
-        )
+        # self.stage4 = nn.Sequential(
+        #     res_bottle_neck(256,256,1),
+        #     res_bottle_neck(256, 256, 1),
+        #     res_bottle_neck(256, 512, 1),
+        #     res_bottle_neck(512, 512, 1),
+        #     res_bottle_neck(256, 512, 2),
+        # )
 
         self.t = nn.Sequential(
-            trt_vit_block(512,512,0.5,4),
-            trt_vit_block(512, 512, 0.5,4),
-            trt_vit_block(512, 1024, 0.5,4),
-            trt_vit_block(1024, classes, 0.5,1),
+            trt_vit_block(256,512,0.5,16,stride=1,dropout=0.5),
+            trt_vit_block(512, 512, 0.5,16,stride=1,dropout=0.5),
+            trt_vit_block(512, 256, 0.5,16,stride=1,dropout=0.5),
+            trt_vit_block(256, 256, 0.5,16,stride=2,dropout=0.5),
         )
+
+        self.attn =  crnn_att(256, heads=32, dim_head=8,lendim=10,clsdim=11,  dropout=0.5)
 
     def forward(self,x):
         out = self.stem(x)
         out = self.stage1(out)
         out = self.stage2(out)
         out = self.stage3(out)
-        out = self.stage4(out)
+        # out = self.stage4(out)
         out = self.t(out)
+        out = self.attn(out)
         return out
-
-net = trt_VIT(10)
-x = torch.randn((10,3,128,128))
-pred = net(x)
-print(pred.shape)
-
-# model_vit = vit(
-#         input_size= 256,
-#         patch_size = 32,
-#         out_dim = 1000,
-#         dim = 1024,
-#         depth = 6,
-#         heads = 16,
-#         mlp_dim = 2048,
-#         dropout = 0.1,
-#         emb_dropout = 0.1
-#     )
-#
-# img = torch.randn(16, 3, 256, 256)
-#
-# preds = model_vit(img)
-#
-# print(preds.shape)  # (16, 1000)
