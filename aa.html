@@ -8,12 +8,14 @@
 </head>
 <body>
 <div id="content">
-    <!--<label for="color_picker" hidden></label>-->
-    <!--<input type="color" id="color_picker" />-->
+    <!--<label for="color_picker" hidden></label>
+    <input type="color" id="color_picker" />-->
+    <label id="oimg" hidden>"data:;base64,{{ img_stream }}"</label>
     <input type="button" id="clear_button" value="Clear" />
     <input type="button" id="save_button" value="Save" />
     <canvas id="canvas">
 </canvas>
+    <img src="data:;base64,{{ img_stream }}" id="outimg">
 </div>
 </body>
 </html>
@@ -22,9 +24,7 @@
     let canvas = document.getElementById('canvas');
     //  获取 2D渲染接口
     const ctx = canvas.getContext('2d');
-    //  将渲染颜色设置为 黑色 #000000
-    ctx.strokeStyle = '#000000';
-    //
+
     ctx.setLineDash([]);
     canvas.setAttribute('height', 500 + 'px');
     canvas.setAttribute('width', 350 + 'px');
@@ -85,8 +85,15 @@
         canvas.removeEventListener('mousemove',mousemove);
         console.log('Mouse leave.')
     }
-    const color_picker = document.getElementById('color_picker');
+    //const color_picker = document.getElementById('color_picker');
     ctx.lineWidth = 5;
+
+    //  将渲染颜色设置为 黑色 #000000
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#ff5821";
+
+
     /*color_picker.onchange = function (e) {
         console.log('Color changed to.' + color_picker.value);
         //  改变画笔颜色
@@ -96,14 +103,19 @@
     clear_button.onclick=function (e) {
         //  清空画板
         ctx.clearRect(0,0,canvas.width,canvas.height);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+
+
 
     const save_button = document.getElementById('save_button');
     save_button.onclick = function (e) {
         var canvas = document.getElementById("canvas");
-        var image = canvas.toDataURL("png");
-        //var image = canvas.toDataURL("img/png").replace("image/png", "image/octet-stream");
-        //window.location.href=image;
+        var image = canvas.toDataURL("image/png");
+        //var image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+        window.location.href=image;
 
         const formData = new FormData();
         formData.append("singlefile", image);
@@ -131,7 +143,7 @@
     /*$(function(){
         $("#save_button").on('click',function (event) {
         var canvas = document.getElementById("canvas");
-        var image = canvas.toDataURL("png");
+        var image = canvas.toDataURL("img/png"");
         //var image = canvas.toDataURL("img/png").replace("image/png", "image/octet-stream");
         //window.location.href=image;
 
@@ -163,6 +175,14 @@
 
 </script>
 <style>
+    #outimg {
+        position:absolute;
+        left: 800px;
+        top: 30px;
+        border-width: 10px;
+        border-style: solid;
+        border-color: blue;
+    }
     #canvas {
         background-color: white;
         position:absolute;
@@ -189,7 +209,7 @@
     #content {
     }
 
-    body {
+    #body {
         background: white;
     }
 </style>
