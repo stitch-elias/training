@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<a href="http://baidu.com">百度一下</a>
+<div id="btn">按钮</div>
+<script>
+var a="<a href=<url>>cc</a>";
+var b=location.href
+b=b.concat("/aa")
+a=a.replace(/<url>/,b);
+document.write(a);
+
+var wrong = document.getElementById('btn');
+wrong.onclick = function() {
+    window.location.href=b;
+}
+</script>
+</body>
+</html>
