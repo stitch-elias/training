@@ -13,6 +13,7 @@ import argparse
 import logging
 from multiprocessing import cpu_count
 import datetime
+import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-m","--mode",dest="mode",default="test",required=False,type=str,nargs="?",choices=["train","test"],action="store",help="choose the mode of program")
@@ -31,7 +32,74 @@ parser.add_argument("-c","--cuda",dest="cuda",default=0,required=False,type=int,
 parser.add_argument("-b","--batchsize",dest="batchsize",default=16,required=False,type=int,nargs="?",action="store",help="the batchsize of dataloader")
 args = parser.parse_args()
 
-def confusionmatrix(p, y, thred, beta=1):
+class pytorch_val(nn.Module):
+    def __init__(self,device,numclass=10):
+        super(pytorch_val, self).__init__()
+        self.device = device
+        self.numclass = numclass
+
+    def confusionmatrix(self,p, y, thred, beta=1):
+        p = F.softmax(p,dim=1) > thred
+        y = F.one_hot(y,self.numclass)
+
+        tp = torch.sum(y.mul(p),dim=0)
+        fn = torch.sum(y.mul(~p),dim=0)
+        fp = torch.sum((1 - y).mul(p),dim=0)
+        tn = torch.sum((1 - y).mul(~p),dim=0)
+
+        tprate = tp / (tp + fn)
+        fprate = fp / (fp + tn)
+
+        precision = tp / (tp + fp)
+        recall = tprate
+
+        accuracy = (tp + tn) / y.shape[0]
+
+        F_meansure = (1 + beta * beta) * precision * recall / (beta * beta * precision + recall)
+
+        return tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure
+    def ClassificationVerification(self,p, y):
+        ROC = []
+        PR = []
+        for i in range(0, 11):
+            tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = self.confusionmatrix(p, y, i * 0.1)
+
+            if not len(ROC):
+                ROC = torch.concat([tprate.unsqueeze(dim=0),fprate.unsqueeze(dim=0)],dim=0).unsqueeze(dim=0)
+                PR = torch.concat([recall.unsqueeze(dim=0), precision.unsqueeze(dim=0)],dim=0).unsqueeze(dim=0)
+            else:
+                ROC = torch.concat([ROC,torch.concat([fprate.unsqueeze(dim=0), tprate.unsqueeze(dim=0)]).unsqueeze(dim=0)],dim=0)
+                PR = torch.concat([PR, torch.concat([recall.unsqueeze(dim=0), precision.unsqueeze(dim=0)]).unsqueeze(dim=0)],dim=0)
+                # shape = (10,2,classfication)
+        ROC = ROC.permute(2,0,1)
+        PR = PR.permute(2, 0, 1)
+
+        PRs = []
+        ROCs = []
+        AP = []
+        AUC = []
+        for i in range(self.numclass):
+            PR[i,:,:] = PR[i,torch.argsort(PR[i,:, 0])]
+            ROC[i,:,:] = ROC[i,torch.argsort(ROC[i,:, 0])]
+
+            PRMask = ~torch.any((PR[i,:,:]).isnan(),dim=1)
+            PR_ = PR[i,PRMask,:].unique(dim=0)
+            PRs.append(PR_)
+
+            ROCMask = ~torch.any((ROC[i,:,:]).isnan(),dim=1)
+            ROC_ = ROC[i,ROCMask,:].unique(dim=0)
+            ROCs.append(ROC_)
+
+            AP.append(torch.sum((PR_[1:,1]+PR_[:-1,1])*((PR_[1:,0]-PR_[:-1,0]))*0.5,dim=0))
+            AUC.append(torch.sum((ROC_[1:, 1] + ROC_[:-1, 1]) * ((ROC_[1:, 0] - ROC_[:-1, 0])) * 0.5, dim=0))
+
+        AP = torch.tensor(AP)
+        AUC = torch.tensor(AUC)
+        mAP = torch.mean(AP,dim=0)
+        mAUC = torch.mean(AUC,dim=0)
+        return PRs,AP,mAP,ROCs,AUC,mAUC
+
+def BCconfusionmatrix(p, y, thred, beta=1):
     # p = F.softmax(p) >= thred
     p = p >= thred
 
@@ -53,7 +121,7 @@ def confusionmatrix(p, y, thred, beta=1):
 
     return tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure
 
-def AUC(p,y):
+def BCAUC(p,y):
 
     np, ip = torch.sort(p[:,1])
     sumrankp = 0.
@@ -71,11 +139,11 @@ def AUC(p,y):
 
     return auc
 
-def SecondaryClassificationVerification(p,y):
+def BCVerification(p,y):
     ROC =[]
     PR = []
     for i in range(0,10):
-        tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = confusionmatrix(p,y,i*0.1)
+        tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = BCconfusionmatrix(p,y,i*0.1)
         ROC.append([tprate,fprate])
         PR.append([recall,precision])
 
@@ -195,7 +263,7 @@ class SEBlock(nn.Module):
         out = self.compress(out)
         out = F.leaky_relu(out)
         out = self.excitation(out)
-        return F.sigmoid(out)
+        return torch.sigmoid(out)
 
 
 class BottleBlock(nn.Module):
@@ -492,15 +560,16 @@ class trainer:
 
         self.savepath = args.savepath
 
-        if args.tensorboard:
-            self.tensorboard = SummaryWriter(args.logpath+"/tensorboard/"+datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))
+        # if args.tensorboard:
+        #     self.tensorboard = SummaryWriter(args.logpath+"/tensorboard/"+datetime.datetime.now().strftime('%Y-%m-%d %H:%M'))
 
         self.epoch = args.epoch
 
-        self.Log = log(args.logpath)
+        # self.Log = log(args.logpath)
+
+        self.val = pytorch_val(self.device)
 
     def train(self,is_val=True):
-        sacc = 0
         self.net = self.net.to(self.device)
         for i in range(self.epoch):
             self.net.train()
@@ -535,9 +604,13 @@ class trainer:
             if is_val:
                 self.net.eval()
                 with torch.no_grad():
-                    acc=0
+                    # acc=0
                     k1=0
                     sumloss = 0
+
+                    ps = []
+                    ys = []
+                    t0 = time.time()
                     for index, (x, y) in enumerate(self.trainloader):
                         x, y = x.to(self.device), y.to(self.device)
                         pred = self.net(x)
@@ -545,32 +618,48 @@ class trainer:
 
                         sumloss += loss.detach().cpu().item()
 
-                        pred = torch.argmax(F.softmax(pred,dim=1),dim=1).detach().cpu()
-                        y = y.detach().cpu()
-                        acc += torch.sum(torch.eq(pred,y)).item()
+                        # pred = torch.argmax(F.softmax(pred,dim=1),dim=1).detach().cpu()
+                        # y = y.detach().cpu()
+                        # acc += torch.sum(torch.eq(pred,y)).item()
+
+                        if len(ps):
+                            ps = torch.concat([ps,pred],dim=0)
+                            ys = torch.concat([ys,y],dim=0)
+                        else:
+                            ps = pred
+                            ys = y
 
                         k1 += 16
 
-                    acc = acc/k1
+                    # acc = acc/k1
                     avgloss = sumloss/k1
 
 
-                self.Log.info("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(acc))
-                self.tensorboard.add_scalar("trainloss",trainavgloss,i)
-                self.tensorboard.add_scalar("testloss",avgloss,i)
-                self.tensorboard.add_scalar("acc",acc,i)
+                    t1 = time.time()
+                    tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = self.val.confusionmatrix(ps,ys,0.5)
 
-                print("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(acc))
+                    PR, AP, mAP, ROC, AUC, mAUC = self.val.ClassificationVerification(ps,ys)
 
-                torch.save(self.net.state_dict(),self.savepath+"/latest.ckpt")
+                    print("num"+str(k1)+" time0:"+str(t1-t0)+" time1:"+str(time.time()-t1))
 
-                if sacc<acc:
-                    print("save")
-                    torch.save(self.net.state_dict(), self.savepath + "/best.ckpt")
-                    sacc = acc
+
+
+
+                # self.Log.info("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(acc))
+                # self.tensorboard.add_scalar("trainloss",trainavgloss,i)
+                # self.tensorboard.add_scalar("testloss",avgloss,i)
+                # self.tensorboard.add_scalar("acc",acc,i)
+
+                print("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(accuracy))
+                print("epoch:"+str(i)+"-------F1:"+str(torch.mean(F_meansure).item())+"-----------mAP:"+str(mAP.item())+"---------mAUC:"+str(mAUC.item()))
+
+                # torch.save(self.net.state_dict(),self.savepath+"/latest.ckpt")
+                #
+                # if sacc<acc:
+                #     print("save")
+                #     torch.save(self.net.state_dict(), self.savepath + "/best.ckpt")
+                #     sacc = acc
 
 if __name__ == '__main__':
     tr = trainer(args)
     tr.train()
-
-
