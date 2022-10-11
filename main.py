@@ -38,9 +38,14 @@ class pytorch_val(nn.Module):
         self.device = device
         self.numclass = numclass
 
-    def confusionmatrix(self,p, y, thred, beta=1):
-        p = F.softmax(p,dim=1) > thred
-        y = F.one_hot(y,self.numclass)
+    def confusionmatrix(self,p, y, thred, beta=1,softmax=True,onehot=True):
+
+        if softmax:
+            p = F.softmax(p,dim=1)
+        p = p > thred
+
+        if onehot:
+            y = F.one_hot(y,self.numclass)
 
         tp = torch.sum(y.mul(p),dim=0)
         fn = torch.sum(y.mul(~p),dim=0)
@@ -53,16 +58,24 @@ class pytorch_val(nn.Module):
         precision = tp / (tp + fp)
         recall = tprate
 
-        accuracy = (tp + tn) / y.shape[0]
+        accuracy = (tp + tn) / (tp+tn+fp+fn)
 
-        F_meansure = (1 + beta * beta) * precision * recall / (beta * beta * precision + recall)
+        F_meansure = (1 + beta * beta) * precision * recall / (beta * beta * (precision + recall))
 
         return tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure
-    def ClassificationVerification(self,p, y):
+    def ClassificationVerification(self,p, y,softmax=True ,onehot=True):
         ROC = []
         PR = []
-        for i in range(0, 11):
-            tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = self.confusionmatrix(p, y, i * 0.1)
+
+        if softmax:
+            p = F.softmax(p, dim=1)
+
+        max = torch.max(p)*1000
+        min = torch.min(p)*1000
+        step = ((max-min)*0.1).floor()
+
+        for i in range(int(min.floor())-int(step)*2, int(max.floor())+int(step)*2,int(step)):
+            tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = self.confusionmatrix(p, y, i * 0.001,softmax=False,onehot=onehot)
 
             if not len(ROC):
                 ROC = torch.concat([tprate.unsqueeze(dim=0),fprate.unsqueeze(dim=0)],dim=0).unsqueeze(dim=0)
@@ -604,7 +617,7 @@ class trainer:
             if is_val:
                 self.net.eval()
                 with torch.no_grad():
-                    # acc=0
+                    acc=0
                     k1=0
                     sumloss = 0
 
@@ -620,37 +633,41 @@ class trainer:
 
                         # pred = torch.argmax(F.softmax(pred,dim=1),dim=1).detach().cpu()
                         # y = y.detach().cpu()
-                        # acc += torch.sum(torch.eq(pred,y)).item()
+                        acc += torch.sum(torch.eq(torch.argmax(pred,dim=1),y)).item()
 
-                        if len(ps):
-                            ps = torch.concat([ps,pred],dim=0)
-                            ys = torch.concat([ys,y],dim=0)
-                        else:
-                            ps = pred
-                            ys = y
+                        # if len(ps):
+                        #     ps = torch.concat([ps,pred],dim=0)
+                        #     ys = torch.concat([ys,y],dim=0)
+                        # else:
+                        #     ps = pred
+                        #     ys = y
+                        ps.append(pred)
+                        ys.append(y)
+
 
                         k1 += 16
-
-                    # acc = acc/k1
+                    ps = torch.concat(ps,dim=0)
+                    ys = torch.concat(ys,dim=0)
+                    acc = acc/k1
                     avgloss = sumloss/k1
 
-
                     t1 = time.time()
-                    tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = self.val.confusionmatrix(ps,ys,0.5)
 
-                    PR, AP, mAP, ROC, AUC, mAUC = self.val.ClassificationVerification(ps,ys)
+                    ps = F.softmax(ps)
+                    ys = F.one_hot(ys,10)
+
+                    tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure = self.val.confusionmatrix(ps,ys,torch.max(ps)/2,softmax=False,onehot=False)
+
+                    PR, AP, mAP, ROC, AUC, mAUC = self.val.ClassificationVerification(ps,ys,softmax=False,onehot=False)
 
                     print("num"+str(k1)+" time0:"+str(t1-t0)+" time1:"+str(time.time()-t1))
-
-
-
 
                 # self.Log.info("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(acc))
                 # self.tensorboard.add_scalar("trainloss",trainavgloss,i)
                 # self.tensorboard.add_scalar("testloss",avgloss,i)
                 # self.tensorboard.add_scalar("acc",acc,i)
-
-                print("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(accuracy))
+                # print(tp, tn, fp, fn, tprate, fprate, precision, recall, accuracy, F_meansure)
+                print("epoch:"+str(i)+"-------trainloss:"+str(trainavgloss)+"-----------testloss:"+str(avgloss)+"---------testacc:"+str(torch.mean(accuracy).item()))
                 print("epoch:"+str(i)+"-------F1:"+str(torch.mean(F_meansure).item())+"-----------mAP:"+str(mAP.item())+"---------mAUC:"+str(mAUC.item()))
 
                 # torch.save(self.net.state_dict(),self.savepath+"/latest.ckpt")
