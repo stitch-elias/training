@@ -1,20 +1,51 @@
 cmake \
-      -D CMAKE_BUILD_TYPE=RELEASE \
-	  -D CMAKE_C_COMPILER=/usr/bin/gcc-7 \
-	  -D BUILD_opencv_python2=OFF \
-	  -D CMAKE_INSTALL_PREFIX=/usr/local \
-      -D INSTALL_PYTHON_EXAMPLES=OFF \
-      -D INSTALL_C_EXAMPLES=OFF \
-      -D OPENCV_ENABLE_NONFREE=ON \
-      -D OPENCV_EXTRA_MODULES_PATH=/home/qiu/project/opencv_contrib-4.6.0/modules \
-      -D PYTHON_EXECUTABLE=/home/ubuntu/anaconda3/envs/myEnv/bin/python3 \
-      -D BUILD_EXAMPLES=ON \
-      -D WITH_CUDA=ON \
-      -D WITH_CUDNN=ON \
-      -D OPENCV_DNN_CUDA=ON \
-      -D WITH_CUBLAS=ON \
-      -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
-      -D OpenCL_LIBRARY=/usr/local/cuda/lib64/libOpenCL.so \
-      -D OpenCL_INCLUDE_DIR=/usr/local/cuda/include \
-	  -D OPENCV_DOWNLOAD_MIRROR_ID=gitcode opencv-4.x \
+  		-D CMAKE_BUILD_TYPE=RELEASE \
+		-D CMAKE_INSTALL_PREFIX=/home/qiu/bin \
+  		-D PYTHON_EXECUTABLE=/home/qiu/anaconda3/envs/myEnv/bin/python3.8 \
+  		-D PYTHON_DEFAULT_EXECUTABLE=/home/qiu/anaconda3/envs/myEnv/bin/python3.8 \
+  		-D PYTHON3_EXECUTABLE=/home/qiu/anaconda3/envs/myEnv/bin/python3.8 \
+  		-D PYTHON3_INCLUDE_DIR=/home/qiu/anaconda3/envs/myEnv/include/python3.8 \
+  		-D PYTHON3_LIBRARY=/home/qiu/anaconda3/envs/myEnv/lib/libpython3.8.so \
+  		-D PYTHON3_NUMPY_INCLUDE_DIRS=/home/qiu/anaconda3/envs/myEnv/lib/python3.8/site-packages/numpy/core/include \
+  		-D PYTHON3_PACKAGES_PATH=/home/qiu/anaconda3/envs/myEnv/lib/python3.8/site-packages \
+  		-D INSTALL_PYTHON_EXAMPLES=OFF \
+  		-D INSTALL_C_EXAMPLES=OFF \
+  		-D OPENCV_ENABLE_NONFREE=ON \
+  		-D BUILD_TIFF=ON \
+  		-D OPENCV_EXTRA_MODULES_PATH=/home/qiu/project/opencv_contrib-4.5.5/modules \
+  		-D BUILD_EXAMPLES=OFF \
+  		-D WITH_CUDA=ON \
+  		-D WITH_CUDNN=ON \
+  		-D OPENCV_DNN_CUDA=ON \
+  		-D WITH_CUBLAS=ON \
+  		-D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+  		-D OpenCL_LIBRARY=/usr/local/cuda/lib64/libOpenCL.so \
+  		-D OpenCL_INCLUDE_DIR=/usr/local/cuda/include/ \
+		-D BUILD_opencv_python3=ON \
+		-D BUILD_opencv_python2=OFF \
+		-D BUILD_opencv_world=ON \
+		-D HAVE_opencv_python3=ON ..
+		
+		
+		
+		#include "opencv4/opencv2/opencv.hpp"
+#include "opencv4/opencv2/cudaarithm.hpp"
+#include "opencv4/opencv2/cudafilters.hpp"
+#include "opencv4/opencv2/cudaimgproc.hpp"
+#include "opencv4/opencv2/imgproc/types_c.h"
+using namespace cv;
+int main()
+{
+        Mat img = imread("../123.jpg");
+        Mat nnnimg;
+        cuda::GpuMat nimg;
+        cuda::GpuMat nnimg;
+        nimg.upload(img);
+        cuda::cvtColor(nimg, nnimg, CV_BGR2RGB);
+        nnimg.download(nnnimg);
+
+        imshow("", nnnimg);
+        waitKey(0);
+        return 0;
+}
       ..
