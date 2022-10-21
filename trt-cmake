@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.4.1)
+
+include_directories(
+        ${CMAKE_SOURCE_DIR}/bin/include/
+        ${CMAKE_SOURCE_DIR}/bin/include/opencv4
+        ${CMAKE_SOURCE_DIR}/bin/include/opencv4/opencv2
+        ${CMAKE_SOURCE_DIR}/tensorRT/include
+        /usr/local/cuda/include
+        )
+ 
+
+file(GLOB SRC ${CMAKE_SOURCE_DIR}/a.cpp)
+set(CODE ${SRC})
+
+link_directories(${PROJECT_SOURCE_DIR}/bin/lib 
+${PROJECT_SOURCE_DIR}/tensorRT/lib 
+/usr/local/cuda/lib64 
+/usr/lib/x86_64-linux-gnu/) #添加动态连接库的路径
+
+
+add_executable(a ${CODE})
+
+target_link_libraries(a -lopencv_world -lnvinfer -lnvinfer_plugin -lnvonnxparser -lnvparsers -lcudart -lcudnn ) #添加libMNN.so
