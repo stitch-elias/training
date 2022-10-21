@@ -1,0 +1,151 @@
+#include "opencv4/opencv2/opencv.hpp"
+#include "opencv4/opencv2/cudaarithm.hpp"
+#include "opencv4/opencv2/cudafilters.hpp"
+#include "opencv4/opencv2/cudaimgproc.hpp"
+#include "opencv4/opencv2/imgproc/types_c.h"
+#include "opencv2/dnn/shape_utils.hpp"
+#include "NvInfer.h"
+#include "cuda_runtime_api.h"
+#include "NvOnnxParser.h"
+#include <iostream>
+#include <vector>
+#include <fstream>
+
+using namespace cv;
+using namespace nvinfer1;
+using namespace nvonnxparser;
+
+class Logger : public ILogger
+{
+        void log(Severity severity, const char *msg) noexcept override
+        {
+                // suppress info-level messages
+                if (severity <= Severity::kWARNING)
+                        std::cout << msg << std::endl;
+        }
+};
+
+int main()
+{
+        Mat img = imread("../123.jpg");
+        Mat nnnimg;
+        cuda::GpuMat nimg;
+        cuda::GpuMat nnimg;
+        nimg.upload(img);
+        cuda::cvtColor(nimg, nnimg, CV_BGR2RGB);
+        nnimg.download(nnnimg);
+
+        imshow("", nnnimg);
+        waitKey(0);
+
+        Logger logger;
+
+        IBuilder *builder = createInferBuilder(logger);
+
+        INetworkDefinition *network = builder->createNetworkV2(1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH));
+
+        IParser *parser = createParser(*network, logger);
+
+        parser->parseFromFile("../minist_sim.onnx", static_cast<int>(Logger::Severity::kWARNING));
+
+        builder->setMaxBatchSize(1);
+
+        IBuilderConfig *config = builder->createBuilderConfig();
+
+        config->setMaxWorkspaceSize(1 << 30);
+
+        ICudaEngine *engine = builder->buildEngineWithConfig(*network, *config);
+
+        IHostMemory *ModelStream = engine->serialize();
+
+        // std::string serialize_str;
+        // std::ifstream serialize_out_put_stream;
+
+        // serialize_str.resize(ModelStream->size());
+
+        // memcpy((void *)serialize_str.data(), ModelStream.data(), ModelStream.size());
+
+        // serialize_out_put_stream.open("../mnist.trt");
+        // serialize_out_put_stream.write(serialize_str);
+        // serialize_out_put_stream.close();
+        FILE *f = fopen("mnist.trt", "wb");
+        fwrite(ModelStream->data(), 1, ModelStream->size(), f);
+        fclose(f);
+
+        delete parser;
+        delete network;
+        delete config;
+        delete builder;
+        delete ModelStream;
+        //----------------------------------------------------------------------
+        IRuntime *runtime = createInferRuntime(logger);
+
+        std::ifstream fin("mnist.trt");
+
+        std::string cache_engine = "";
+        while (fin.peek() != EOF)
+        {
+                std::stringstream buff;
+                buff << fin.rdbuf();
+                cache_engine.append(buff.str());
+        }
+        fin.close();
+        ICudaEngine *r_engine = runtime->deserializeCudaEngine(cache_engine.data(), cache_engine.size(), nullptr);
+
+        // int32_t inputIndex = engine->getBindingIndex("input");
+        // int32_t outputIndex = engine->getBindingIndex("output");
+        int32_t inputIndex = 0;
+        int32_t outputIndex = 0;
+        for (int bi = 0; bi < r_engine->getNbBindings(); bi++)
+        {
+                std::cout << "-j-h" << std::endl;
+                if (engine->bindingIsInput(bi) == true)
+                        inputIndex = bi;
+                else
+                        outputIndex = bi;
+        }
+
+        Mat img1 = imread("../test.jpg");
+        cvtColor(img1, img1, COLOR_BGR2YCrCb);
+        std::vector<Mat> over;
+        split(img1, over);
+        over[0].convertTo(over[0], CV_32F, 1 / 255.0, -0.5);
+
+        // void *GPU_input_Buffer_ptr;
+        // void *GPU_output_Buffer_ptr;
+        void *buffer[2];
+
+        cudaMalloc(&buffer[inputIndex], 28 * 28 * sizeof(float));
+        cudaMalloc(&buffer[outputIndex], 10 * sizeof(float));
+        // cudaMemerycpy(GPU_input_Buffer_ptr,input.data(),input.size());
+
+        // buffer[inputIndex] = static_cast<void *>(GPU_input_Buffer_ptr);
+        // buffer[outputIndex] = static_cast<void *>(GPU_output_Buffer_ptr);
+
+        IExecutionContext *context = r_engine->createExecutionContext();
+        // context->executeV2(buffer);
+
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
+
+        cudaMemcpyAsync(buffer[inputIndex], over[0].data, 28 * 28 * sizeof(float), cudaMemcpyHostToDevice);
+        context->enqueueV2(buffer, stream, nullptr);
+
+        std::vector<float> output(10);
+        cudaMemcpy(output.data(), buffer[outputIndex], output.size() * sizeof(float), cudaMemcpyDeviceToHost);
+
+        for (auto i : output)
+        {
+                std::cout << i << std::endl;
+        }
+
+        //释放资源
+        cudaStreamDestroy(stream);
+        context->destroy();
+        engine->destroy();
+        runtime->destroy();
+        cudaFree(buffer[inputIndex]);
+        cudaFree(buffer[outputIndex]);
+
+        return 0;
+}
