@@ -1,0 +1,55 @@
+        auto net = std::shared_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile("../minist_sim.mnn"));
+
+        MNN::BackendConfig bconfig;
+        bconfig.precision = MNN::BackendConfig::Precision_Normal;
+        bconfig.power = MNN::BackendConfig::Power_Normal;
+        bconfig.memory = MNN::BackendConfig::Memory_Normal;
+
+        MNN::ScheduleConfig config;
+        config.backendConfig = &bconfig;
+        config.numThread = 4;
+        config.type = MNN_FORWARD_CUDA;
+        config.backupType = MNN_FORWARD_CPU;
+
+        float mean[3] = {127.5f, 127.5f, 127.5f};
+        float normals[3] = {
+            1. / 255.f,
+            1. / 255.f,
+            1. / 255.f,
+        };
+        MNN::CV::ImageProcess::Config img_config;
+        ::memcpy(img_config.mean, mean, sizeof(mean));
+        ::memcpy(img_config.normal, normals, sizeof(normals));
+        img_config.sourceFormat = MNN::CV::GRAY;
+        img_config.destFormat = MNN::CV::GRAY;
+        auto pretreat = std::shared_ptr<MNN::CV::ImageProcess>(MNN::CV::ImageProcess::create(img_config));
+        MNN::CV::Matrix trans;
+        trans.setScale(1.0f, 1.0f);
+        pretreat->setMatrix(trans);
+
+        auto session = net->createSession(config);
+
+        auto inTensor = net->getSessionInput(session, nullptr);
+        auto nchwTensor = MNN::Tensor::create<float>(inTensor->shape(), NULL, MNN::Tensor::CAFFE);
+        inTensor->copyFromHostTensor(nchwTensor);
+
+        /*net->resizeTensor(inTensor,{1,1,h,w});
+        net->resizeSession(session);*/
+
+        cv::Mat img = imread("../test.jpg", 0);
+        pretreat->convert(img.data, 28, 28, 0, inTensor);
+
+        net->runSession(session);
+
+        auto outTensor = net->getSessionOutput(session, nullptr);
+
+        auto out = new MNN::Tensor(outTensor, outTensor->getDimensionType());
+        outTensor->copyToHostTensor(out);
+
+        out->print();
+        float oo[10];
+        for (int i = 0; i < 10; i++)
+        {
+                oo[i] = out->host<float>()[i];
+                std::cout << oo[i] << std::endl;
+        }
