@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+        <script src="http://libs.baidu.com/jquery/2.1.4/jquery.min.js"></script>
+</head>
+<body>
+
+
+
+
+<div id="uploadImg">上传图片</div>
+<p id="a">11</p>
+<!--<form action = "/upload" method = "POST"-->
+<!--         enctype = "multipart/form-data">-->
+<!--         <input type = "file" name = "file" accept="image/jpg,image/png" multiple>-->
+<!--         <input type = "submit" value="提交">-->
+<!--      </form>-->
+<form id="uploadForm" method="POST" enctype="multipart/form-data">
+<input type="file" id="file1" accept="image/jpg,image/png" multiple >
+    <input id="btn" type = "button" value="提交1">
+</form>
+
+  <div id="dropZone">
+    DROP HERE
+  </div>
+<progress id="progress" value="0" max="100"> </progress>
+</body>
+</html>
+
+<script>
+    const LENGTH = 1024;
+    document.getElementById('file1').addEventListener('change', (event) => {
+    document.getElementById('a').innerHTML = "end";
+    var file = event.target.files[0];
+
+
+
+<!--    var totalSize = file.size;//文件总大小-->
+<!--    var start = 0;//每次上传的开始字节-->
+<!--    var end = start + LENGTH;//每次上传的结尾字节-->
+<!--    var fd = null//创建表单数据对象-->
+<!--    var blob = null;//二进制对象-->
+<!--    var xhr = null;//xhr对象-->
+
+<!--    while(start<totalSize){-->
+<!--    blob=file.slice(start,end);-->
+<!--    formData.append("imgFile",blob);-->
+
+<!--        start = end;-->
+<!--        end = start + LENGTH;-->
+<!--    }-->
+
+
+        alert(file.type);
+        var formData = new FormData();
+        formData.append("imgFile",file);
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/upload", true);
+        xhr.send(formData);
+        alert("a");
+    });
+
+
+<!--    const save_button = document.getElementById('btn');-->
+<!--    save_button.onclick = function (e) {-->
+<!--    var file = document.getElementById('file1').files;-->
+
+<!--    alert(file.type);-->
+<!--    var formData = new FormData();-->
+<!--    formData.append("imgFile",file);-->
+<!--    var xhr = new XMLHttpRequest();-->
+<!--    xhr.open("POST", "/upload", true);-->
+<!--    xhr.send(formData);-->
+<!--    }-->
+
+const dropZone = document.getElementById('dropZone');
+ dropZone.addEventListener('dragover', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+   dropZone.addEventListener('dragenter', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+
+
+   dropZone.addEventListener('drop', event => {
+
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    var file = event.dataTransfer.files[0];
+        var formData = new FormData();
+
+        formData.append("imgFile",file);
+        alert(file.size);
+        reader.readAsDataURL(file);
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/upload", true);
+        xhr.send(formData);
+
+     });
+
+});
+</script>
+<style>
+    #dropZone {
+
+        background-color:white;
+        width: 100px;
+        height: 100px;
+        border-width: 10px;
+        border-style: solid;
+        border-color: blue;
+    }
+</style>

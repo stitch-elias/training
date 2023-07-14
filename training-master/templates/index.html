@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+<div>
+    {% if session["id"]!=null %}
+        <a >{{session["id"]}}</a>
+        <a href="logout">logout</a>
+    {% else %}
+        <a id="login">login</a>
+        <a id="logup">logup</a>
+    {% endif %}
+</div>
+
+<a href="/bb">dd</a>
+<a href="/cc">ee</a>
+
+<div id="bg">
+    <div id="loginalter">
+        <form action="/login" method="post" id="log">
+            <input type="text" name="n" onchange="check()" id="tt"><br>
+            <input type="password" name="p"><br>
+            <input type="submit" name="s" value="login">
+            <label id="msg">1</label>
+        </form>
+        <div id="exit">exit</div>
+</div>
+</div>
+
+</body>
+</html>
+<style type="text/css">
+        #bg{
+            position: absolute;
+            top:0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color:rgba(0,0,0,0.5);
+            display: none;
+        }
+        #loginalter{
+
+            width: 260px;
+            position: absolute;
+            z-index: 2;
+            left: 50%;
+            margin-left: -130px;
+            top:50%;
+            margin-top:-75px;
+            background-color: #fff;
+        }
+
+</style>
+<script>
+var a="<a href=<url>>cc</a>";
+var b=location.href
+b=b.concat("/aa")
+a=a.replace(/<url>/,b);
+document.write(a);
+
+var wrong = document.getElementById('login');
+wrong.onclick = function() {
+    document.getElementById('log').setAttribute("action","/login")
+    document.getElementById('bg').style.display='block';
+}
+var wrong_ = document.getElementById('logup');
+wrong_.onclick = function() {
+    document.getElementById('log').setAttribute("action","/logup")
+    document.getElementById('bg').style.display='block';
+}
+
+var ee = document.getElementById('exit');
+ee.onclick = function() {
+    document.getElementById('bg').style.display='none';
+}
+
+function check(){
+document.getElementById('msg').innerHTML = document.getElementById('tt').value;
+}
+</script>

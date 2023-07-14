@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="http://libs.baidu.com/jquery/2.1.4/jquery.min.js"></script>
+    <title>Title</title>
+</head>
+<body>
+  <div id="dropZone">
+    DROP HERE
+  </div>
+  <div> <br><br></div>
+  <div id="content">
+      Your image to appear here..
+  </div>
+</body>
+</html>
+<script>
+const reader = new FileReader();
+const content = document.getElementById('content');
+const dropZone = document.getElementById('dropZone');
+ dropZone.addEventListener('dragover', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+   dropZone.addEventListener('dragenter', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+
+   dropZone.addEventListener('drop', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    var file = event.dataTransfer.files[0];
+        var formData = new FormData();
+        formData.append("imgFile",file);
+        reader.readAsDataURL(file);
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/upload", true);
+        xhr.onload = e => {
+          var img_=document.createElement('img');
+          img_.style.height = '100px';
+          img_.style.width = '100px';
+          img_.src = "data:image/png;base64,"+xhr.responseText;
+          content.innerHTML = '';
+          content.append(img_);
+        };
+        xhr.send(formData);
+        reader.addEventListener('load', (event) => {
+          dropZone.innerHTML = '';
+          const img = document.createElement('img');
+          img.style.height = '100px';
+          img.style.width = '100px';
+          dropZone.appendChild(img);
+          img.src = event.target.result;
+          img.alt = file.name;
+        });
+        reader.readAsDataURL(file);
+     });
+</script>
+<style>
+    #dropZone {
+        background-color:white;
+        width: 100px;
+        height: 100px;
+        border-width: 10px;
+        border-style: solid;
+        border-color: blue;
+    }
+    #content {
+        background-color:white;
+        width: 100px;
+        height: 100px;
+        border-width: 10px;
+        border-style: solid;
+        border-color: blue;
+    }
+</style>
