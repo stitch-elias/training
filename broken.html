@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+
+</head>
+<body onload="startGame()">
+<script>
+var myGamePiece;
+var myObstacles = [];
+var myScore;
+var myMusic;
+var mySound;
+var myBall;
+
+function startGame() {
+    myScore = new component("15px", "Consolas", "black", 100, 10, "text");
+
+<!--    mySound = new sound("../static/s.wav");-->
+<!--    myMusic = new sound("../static/s.wav");-->
+<!--    myMusic.play();-->
+
+    myGamePiece = new component(40, 5, "yellow", 100, 200-5);
+    myBall= new component(10, 10, "../static/smiley.gif", 115, 200-15, "image");
+    myBall.moveAngle = 1;
+    myBackground = new component(400, 200, "../static/b.jpg", 0, 0, "background");
+
+    initGame()
+    myGameArea.start();
+}
+
+function initGame(){
+    for(var i=0;i<3;i+=1){
+        for(var j=0;j<3;j+=1){
+            myObstacles.push(new component(20, 10, "green", j*60, i*10));
+            myObstacles.push(new component(20, 10, "red", j*60+20, i*10));
+            myObstacles.push(new component(20, 10, "blue", j*60+40, i*10));
+        }
+        myObstacles.push(new component(20, 10, "green", 160, i*10));
+        myObstacles.push(new component(20, 10, "red", 180, i*10));
+    }
+}
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 200;
+        this.canvas.height = 200;
+
+        this.frameNo = 0;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.interval = setInterval(updateGameArea, 20);
+
+        this.score = 0;
+        this.state = 1;
+
+        window.addEventListener('keydown', function (e) {
+          myGameArea.keys = (myGameArea.keys || []);
+          myGameArea.keys[e.keyCode] = (e.type == "keydown");
+          myBall.image.src = "../static/angry.gif";
+        })
+        window.addEventListener('keyup', function (e) {
+          myGameArea.keys[e.keyCode] = (e.type == "keydown");
+          myBall.image.src = "../static/smiley.gif";
+        })
+    },
+
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+
+    stop : function() {
+      clearInterval(this.interval);
+    }
+}
+
+function component(width, height, color, x, y, type) {
+    this.type = type;
+    if (type == "image" || type == "background") {
+        this.image = new Image();
+        this.image.src = color;
+    }
+    this.width = width;
+    this.height = height;
+    this.speedX = 0;
+    this.speedY = 0;
+    this.angle = 0;
+    this.moveAngle = 0;
+    this.x = x;
+    this.y = y;
+    this.hx = 0;
+    this.hy = 0;
+    this.state=0;
+    this.update = function() {
+        ctx = myGameArea.context;
+        if (this.type == "text") {
+          ctx.font = this.width + " " + this.height;
+          ctx.fillStyle = color;
+          ctx.fillText(this.text, this.x, this.y);
+        } else if (type == "background"){
+            ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+        } else if (this.type == "image") {
+            ctx.save();
+            ctx.translate(this.x+5, this.y+5);
+            ctx.rotate(this.angle);
+            ctx.translate(-this.x-5, -this.y-5);
+            ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+            ctx.restore();
+        } else {
+          ctx.fillStyle = color;
+          ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+    this.newPos = function() {
+        this.hx = this.x;
+        this.hy = this.y;
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.type == "background") {
+            if (this.x == -(this.width-200)) {
+                this.x = 0;
+            }
+        } else {
+          this.angle += this.moveAngle * Math.PI / 180;
+        }
+    }
+}
+
+function updateGameArea() {
+    if(myGamePiece.x<0){
+        myGamePiece.x = 0;
+    }
+    if(myGamePiece.x>200-40){
+        myGamePiece.x = 200-40;
+    }
+
+    if(myBall.y>200-10){
+        myGameArea.stop();
+        myGameArea.state = 2;
+        return;
+    }
+    if(myBall.y<0){
+        myBall.speedY = -myBall.speedY;
+    }
+    if(myBall.x<0){
+        myBall.speedX = -myBall.speedX;
+    }
+    if(myBall.x>200-10){
+        myBall.speedX = -myBall.speedX;
+    }
+
+    if(myBall.x>=myGamePiece.x+7.5 && myBall.x<=myGamePiece.x+7.5+15 && myBall.y>=myGamePiece.y-10 && myBall.state==1){
+        myBall.speedY = -myBall.speedY;
+    }
+    if(myBall.x>myGamePiece.x+7.5+15 && myBall.x<=myGamePiece.x+40-0.5 && myBall.y>=myGamePiece.y-10 && myBall.state==1){
+        myBall.speedY = -myBall.speedY;
+        if(myBall.speedX<0){
+            myBall.speedX=-myBall.speedX;
+        }
+        myBall.speedX = myBall.speedX+0.1;
+    }
+    if(myBall.x>myGamePiece.x+0.5 && myBall.x<myGamePiece.x+7.5 && myBall.y>=myGamePiece.y-10 && myBall.state==1){
+        myBall.speedY = -myBall.speedY;
+        if(myBall.speedX>0){
+            myBall.speedX=-myBall.speedX;
+        }
+        myBall.speedX = myBall.speedX-0.1;
+    }
+    if(myBall.x>=myGamePiece.x && myBall.x<myGamePiece.x+0.5 && myBall.y>=myGamePiece.y-10 && myBall.state==1){
+        myBall.speedY = -myBall.speedY;
+        myBall.speedX = -myBall.speedX;
+    }
+    if(myBall.x>myGamePiece.x+40-0.5 && myBall.x<=myGamePiece.x+40 && myBall.y>=myGamePiece.y-10 && myBall.state==1){
+        myBall.speedY = -myBall.speedY;
+        myBall.speedX = -myBall.speedX;
+    }
+
+
+
+    var dis=[];
+    flag = 0;
+    for (i = 0; i < myObstacles.length; i += 1) {
+        if(myBall.x>=myObstacles[i].x-2 && myBall.x<=myObstacles[i].x+20-2 && myBall.y<=myObstacles[i].y+10){
+            dis.push(i);
+            if(flag==0){
+                flag=1;
+            }
+        }
+        if(myBall.x<myObstacles[i].x && myBall.x>=myObstacles[i].x-2 && myBall.y<=myObstacles[i].y+10){
+            dis.push(i);
+            if(flag==0 || flag==1){
+                flag=2;
+            }
+        }
+        if(myBall.x>myObstacles[i].x+20-2 && myBall.x<=myObstacles[i].x+20 && myBall.y<=myObstacles[i].y+10){
+            dis.push(i);
+            if(flag==0 || flag==1){
+                flag=3;
+            }
+        }
+    }
+    if(flag==1){
+        myBall.speedY = -myBall.speedY;
+    } else if(flag==2) {
+        myBall.speedX = -myBall.speedX;
+        myBall.speedY = -myBall.speedY;
+    } else if(flag==3) {
+        myBall.speedX = -myBall.speedX;
+        myBall.speedY = -myBall.speedY;
+    }
+    for (i = dis.length-1; i >=0 ; i -= 1) {
+        myObstacles.splice(dis[i],1);
+        myGameArea.score+=10;
+    }
+
+
+<!--    if(myGamePiece.x<0 || myGamePiece.x>200-10 || myGamePiece.y<0 || myGamePiece.y>200-10){-->
+<!--            myGameArea.stop();-->
+<!--            myGameArea.state = 2;-->
+<!--            return;-->
+<!--    }-->
+
+
+    myGameArea.clear();
+
+    myBackground.speedX = -1;
+    myBackground.newPos();
+    myBackground.update();
+
+    myGameArea.frameNo += 1;
+
+    for (i = 0; i < myObstacles.length; i += 1) {
+        myObstacles[i].update();
+    }
+
+    myScore.text="SCORE: " + myGameArea.score;
+    myScore.update();
+
+    if (myGameArea.keys && myGameArea.keys[37])
+    {
+        myGamePiece.speedX = -1;
+        myGamePiece.speedY = 0;
+
+    }
+    if (myGameArea.keys && myGameArea.keys[39])
+    {
+        myGamePiece.speedX = 1;
+        myGamePiece.speedY = 0;
+    }
+
+    myGamePiece.newPos();
+    myGamePiece.update();
+
+
+    if (myGameArea.keys && myGameArea.keys[38])
+    {
+        if(myBall.state==0){
+            myBall.state = 1
+            myBall.speedY = -1;
+            myBall.speedX = -0.5;
+        }
+    }
+    if(myBall.state==0){
+        myBall.x = myGamePiece.x+20-5;
+        myBall.y = 200-10-5;
+    } else {
+        myBall.newPos();
+    }
+    myBall.update();
+
+    if(myObstacles.length==0){
+        myGameArea.stop();
+        myGameArea.state = 2;
+        return;
+    }
+}
+
+function restart() {
+          myGamePiece.speedX = 0;
+          myGamePiece.speedY = 0;
+          myGamePiece.x = 100;
+          myGamePiece.y = 200-5;
+          myGamePiece.angle = 0;
+          myBackground.speedX = 0;
+          myBackground.speedY = 0;
+          myBackground.x = 0;
+          myBackground.y = 0;
+          myGameArea.frameNo = 0;
+          myGameArea.score = 0;
+          myObstacles=[];
+
+          myBall.speedX = 0;
+          myBall.speedY = 0;
+          myBall.x = 115;
+          myBall.y = 200-15;
+          myBall.angle = 0;
+          myBall.state=0
+
+          myGameArea.stop();
+          myGameArea.interval = setInterval(updateGameArea, 20);
+          myGameArea.state = 1;
+
+          initGame()
+}
+
+function stop() {
+          if(myGameArea.state == 1){
+            myGameArea.stop();
+            myGameArea.state = 0;
+          }
+}
+
+function start() {
+          if(myGameArea.state == 0){
+            myGameArea.interval = setInterval(updateGameArea, 20);
+            myGameArea.state = 1;
+           }
+}
+</script>
+<br>
+<button onclick="start()">start</button>
+<button onclick="stop()">stop</button>
+<button onclick="restart()">restart</button>
+</body>
+</html>

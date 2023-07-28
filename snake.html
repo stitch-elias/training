@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+
+</head>
+<body onload="startGame()">
+<script>
+var myGamePiece;
+var myObstacles = [];
+var myScore;
+var myMusic;
+var mySound;
+var foods = [];
+
+function startGame() {
+    myScore = new component("15px", "Consolas", "black", 100, 10, "text");
+
+<!--    mySound = new sound("../static/s.wav");-->
+<!--    myMusic = new sound("../static/s.wav");-->
+<!--    myMusic.play();-->
+
+    myGamePiece = new component(10, 10, "../static/smiley.gif", 10, 120, "image");
+    myBackground = new component(400, 200, "../static/b.jpg", 0, 0, "background");
+
+    myGameArea.start();
+}
+
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 200;
+        this.canvas.height = 200;
+<!--        this.canvas.style.cursor = "none"; //hide the original cursor-->
+
+        this.frameNo = 0;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.interval = setInterval(updateGameArea, 20);
+
+        this.score = 0;
+        this.state = 1;
+
+        window.addEventListener('keydown', function (e) {
+          myGameArea.keys = (myGameArea.keys || []);
+          myGameArea.keys[e.keyCode] = (e.type == "keydown");
+          myGamePiece.image.src = "../static/angry.gif";
+        })
+        window.addEventListener('keyup', function (e) {
+          myGameArea.keys[e.keyCode] = (e.type == "keydown");
+          myGamePiece.image.src = "../static/smiley.gif";
+        })
+
+<!--        window.addEventListener('mousemove', function (e) {-->
+<!--            myGameArea.x = e.pageX;-->
+<!--            myGameArea.y = e.pageY;-->
+<!--        })-->
+<!--        window.addEventListener('mousedown', function (e) {-->
+<!--          myGameArea.x = e.pageX;-->
+<!--          myGameArea.y = e.pageY;-->
+<!--          myGamePiece.image.src = "../static/angry.gif";-->
+<!--        })-->
+<!--        window.addEventListener('mouseup', function (e) {-->
+<!--          myGameArea.x = false;-->
+<!--          myGameArea.y = false;-->
+<!--          myGamePiece.image.src = "../static/smiley.gif";-->
+<!--          myGamePiece.gravity = 0.5;-->
+<!--        })-->
+
+    },
+
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+
+    stop : function() {
+      clearInterval(this.interval);
+    }
+}
+
+function component(width, height, color, x, y, type) {
+    this.type = type;
+    if (type == "image" || type == "background") {
+        this.image = new Image();
+        this.image.src = color;
+    }
+    this.width = width;
+    this.height = height;
+    this.speedX = 0;
+    this.speedY = 0;
+    this.angle = 0;
+    this.moveAngle = 1;
+    this.x = x;
+    this.y = y;
+    this.statex = [];
+    this.statey = [];
+    this.update = function() {
+        ctx = myGameArea.context;
+        if (this.type == "text") {
+          ctx.font = this.width + " " + this.height;
+          ctx.fillStyle = color;
+          ctx.fillText(this.text, this.x, this.y);
+        } else if (type == "background"){
+            ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+        } else if (this.type == "image") {
+            ctx.save();
+            ctx.translate(this.x+5, this.y+5);
+            ctx.rotate(this.angle);
+            ctx.translate(-this.x-5, -this.y-5);
+            ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+            ctx.restore();
+        } else {
+          ctx.fillStyle = color;
+          ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+    this.newPos = function() {
+        this.x += this.speedX;
+        if (this.type == "background") {
+            this.y += this.speedY;
+            if (this.x == -(this.width-200)) {
+                this.x = 0;
+            }
+        } else {
+          this.angle += this.moveAngle * Math.PI / 180;
+          this.y += this.speedY;
+        }
+    }
+}
+
+function updateGameArea() {
+
+    if(myGamePiece.x<0 || myGamePiece.x>200-10 || myGamePiece.y<0 || myGamePiece.y>200-10){
+            myGameArea.stop();
+            myGameArea.state = 2;
+            return;
+    }
+
+    for (i = 1; i < myObstacles.length; i += 1) {
+            if (crash(myGamePiece,myObstacles[i])){
+                myGameArea.stop();
+                myGameArea.state = 2;
+                return;
+            }
+    }
+
+    myGameArea.clear();
+
+    myBackground.speedX = -1;
+    myBackground.newPos();
+    myBackground.update();
+
+    myGameArea.frameNo += 1;
+
+    if(myObstacles.length==0){
+        myObstacles.push(new component(10, 10, "green", myGamePiece.x, myGamePiece.y-10));
+        myObstacles.push(new component(10, 10, "red", myGamePiece.x, myGamePiece.y-20));
+        myObstacles.push(new component(10, 10, "blue", myGamePiece.x, myGamePiece.y-30));
+        for(i=10;i>0;i-=1){
+            myObstacles[0].statey.push(myGamePiece.y-i);
+            myObstacles[1].statey.push(myGamePiece.y-10-i);
+            myObstacles[2].statey.push(myGamePiece.y-20-i);
+            myObstacles[0].statex.push(myGamePiece.x);
+            myObstacles[1].statex.push(myGamePiece.x);
+            myObstacles[2].statex.push(myGamePiece.x);
+        }
+    }
+
+    if (myGamePiece.speedX!=0 || myGamePiece.speedY!=0){
+        for (i = myObstacles.length-1; i > 0; i -= 1) {
+            myObstacles[i].statey.push(myObstacles[i-1].statey[0]);
+            myObstacles[i].statex.push(myObstacles[i-1].statex[0]);
+            myObstacles[i].x = myObstacles[i].statex[0];
+            myObstacles[i].y = myObstacles[i].statey[0];
+            myObstacles[i].statex.shift();
+            myObstacles[i].statey.shift();
+<!--            myObstacles[i].statex = myObstacles[i].statex.slice(1,myObstacles[i].statex.length);-->
+<!--            myObstacles[i].statey = myObstacles[i].statey.slice(1,myObstacles[i].statey.length);-->
+            myObstacles[i].update();
+        }
+
+        myObstacles[0].statey.push(myGamePiece.y);
+        myObstacles[0].statex.push(myGamePiece.x);
+        myObstacles[0].x = myObstacles[0].statex[0];
+        myObstacles[0].y = myObstacles[0].statey[0];
+        myObstacles[0].statex.shift();
+        myObstacles[0].statey.shift();
+<!--        myObstacles[0].statex = myObstacles[0].statex.slice(1,myObstacles[0].statex.length);-->
+<!--        myObstacles[0].statey = myObstacles[0].statey.slice(1,myObstacles[0].statey.length);-->
+        myObstacles[0].update();
+
+    } else {
+        for (i = 0; i < myObstacles.length; i += 1) {
+                myObstacles[i].update();
+        }
+    }
+
+
+    if (myGameArea.frameNo == 1  || everyinterval(150)) {
+        w = myGameArea.canvas.width;
+        while(5>foods.length){
+            x = Math.floor(Math.random()*(189)+1);
+            y = Math.floor(Math.random()*(189)+1);
+            if(crash_(myGamePiece,x,y)){continue;}
+            var p=false;
+            for (i = 0; i < myObstacles.length; i += 1) {
+                if(crash_(myObstacles[i],x,y)){p=ture;}
+            }
+           for (i = 0; i < foods.length; i += 1) {
+                if(crash_(foods[i],x,y)){p=ture;}
+            }
+            if(p){continue;}
+            foods.push(new component(10, 10, "green", x, y));
+        }
+
+    }
+    for (i = 0; i < foods.length; i += 1) {
+       if(crash(myGamePiece,foods[i])){
+            myGameArea.score+=1;
+            foods.splice(i,1);
+            myObstacles.push(new component(10, 10, "blue", myGamePiece.x, myGamePiece.y-30));
+            for (j = 0; j < 10; j += 1) {
+                myObstacles[myObstacles.length-1].statey.push(myObstacles[myObstacles.length-1].statey[9]);
+                myObstacles[myObstacles.length-1].statex.push(myObstacles[myObstacles.length-1].statex[9]);
+            }
+       }
+    }
+
+    for (i = 0; i < foods.length; i += 1) {
+       foods[i].update();
+    }
+
+
+    myScore.text="SCORE: " + myGameArea.score;
+    myScore.update();
+
+    if (myGameArea.keys && myGameArea.keys[37])
+    {
+        myGamePiece.speedX = -1;
+        myGamePiece.speedY = 0;
+
+    }
+    if (myGameArea.keys && myGameArea.keys[39])
+    {
+        myGamePiece.speedX = 1;
+        myGamePiece.speedY = 0;
+
+    }
+    if (myGameArea.keys && myGameArea.keys[38])
+    {
+        myGamePiece.speedY = -1;
+        myGamePiece.speedX = 0;
+
+    }
+    if (myGameArea.keys && myGameArea.keys[40])
+    {
+        myGamePiece.speedY = 1;
+        myGamePiece.speedX = 0;
+
+    }
+
+    myGamePiece.newPos();
+    myGamePiece.update();
+
+}
+
+function crash(head,body) {
+  let x0;
+  let x1;
+  let y0;
+  let y1;
+  head.x > body.x ? x0 =  head.x : x0 =  body.x;
+  head.x + 10 < body.x + 10 ? x1 =  head.x +10 : x1 =  body.x + 10;
+  head.y > body.y ? y0 =  head.y : y0 =  body.y;
+  head.y + 10 < body.y + 10 ? y1 =  head.y + 10 : y1 =  body.y + 10;
+  if((x1-x0)>0 && (y1-y0)>0){return true;}
+  else {return false;}
+}
+
+function crash_(head,x,y) {
+  let x0;
+  let x1;
+  let y0;
+  let y1;
+  head.x > x ? x0 =  head.x : x0 =  x;
+  head.x + 10 < x + 10 ? x1 =  head.x +10 : x1 =  x + 10;
+  head.y > y ? y0 =  head.y : y0 =  y;
+  head.y + 10 < y + 10 ? y1 =  head.y + 10 : y1 =  y + 10;
+  if((x1-x0)>0 && (y1-y0)>0){return true;}
+  else {return false;}
+}
+function everyinterval(n) {
+  if ((myGameArea.frameNo / n) % 1 == 0) {return true;}
+  return false;
+}
+
+function restart() {
+          myGamePiece.speedX = 0;
+          myGamePiece.speedY = 0;
+          myGamePiece.x = 10;
+          myGamePiece.y = 120;
+          myGamePiece.statex = 0;
+          myGamePiece.steatey = 0;
+          myGamePiece.angle = 0;
+          myBackground.speedX = 0;
+          myBackground.speedY = 0;
+          myBackground.x = 0;
+          myBackground.y = 0;
+          myGameArea.frameNo = 0;
+          myGameArea.score = 0;
+          myObstacles=[];
+          foods = [];
+          myGameArea.stop();
+          myGameArea.interval = setInterval(updateGameArea, 20);
+          myGameArea.state = 1;
+}
+
+function stop() {
+          if(myGameArea.state == 1){
+            myGameArea.stop();
+            myGameArea.state = 0;
+          }
+}
+
+function start() {
+          if(myGameArea.state == 0){
+            myGameArea.interval = setInterval(updateGameArea, 20);
+            myGameArea.state = 1;
+           }
+}
+
+</script>
+<br>
+<button onclick="start()">start</button>
+<button onclick="stop()">stop</button>
+<button onclick="restart()">restart</button>
+</body>
+</html>

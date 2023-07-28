@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+</head>
+<body onload="startGame()">
+<script>
+
+var myColors = ["red", "#039518", "#ff00dc", "#ff6a00", "gray", "#0094ff", "#d2ce00"];
+var myGamePiece;
+var myObstacles = [];
+var myScore;
+var myMusic;
+var mySound;
+var myShuffleBalls = [];
+
+function getRandom(max) {
+    return parseInt(Math.random() * 1000000 % (max));
+}
+
+function startGame() {
+    myScore = new component("15px", "Consolas", "black", 100, 35, "text");
+
+<!--    myGamePiece = new component(10, 10, "../static/smiley.gif", 10, 120, "image");-->
+<!--    myBackground = new component(400, 200, "../static/b.jpg", 0, 0, "background");-->
+    myMap = new component(0, 0, "../static/b.jpg", 0, 0, "map");
+<!--    myBall = new component(0, 0, myColors[getRandom(7)], 30, 60, "ball");-->
+    shuffleBall();
+    mapBall(-1,-1);
+    shuffleBall();
+    myGameArea.start();
+}
+
+function shuffleBall() {
+    for (var j = 1; j <= 3; j++) {
+        myShuffleBalls.push(new component(0, 0, myColors[getRandom(7)], 10+j*20, 30, "ball"));
+    }
+}
+
+function mapBall(mx,my) {
+    while(myShuffleBalls.length>0){
+        var rx = 10+getRandom(8)*20;
+        var ry = 60+getRandom(8)*20;
+        if(checkBall(rx,ry)==-1 && rx>0 && rx<180 && ry>0+50 && ry<180+50){
+            if(mx != rx && my != ry){
+            var ball = myShuffleBalls.shift();
+            ball.x = rx;
+            ball.y = ry;
+            myObstacles.push(ball);
+            }
+        }
+    }
+}
+
+function checkBall(x,y) {
+    for (var j = 0; j < myObstacles.length; j++) {
+        if(myObstacles[j].x+10>x && myObstacles[j].x-10<x && myObstacles[j].y+10>y && myObstacles[j].y-10<y){
+            return j;
+        }
+    }
+    return -1;
+}
+
+function dijkstra(input,target) {
+
+    this.close=[{"x":input["x"],"y":input["y"],"greed":0,"parentX":0,"parentY":0,}];
+    this.open=[];
+    this.result=[{"x":target["x"],"y":target["y"]}];
+    this.zz=0;
+    this.check = function(x,y,px,py) {
+            if(checkBall(x,y)==-1 &&x>0 && x<180 && y>0+50 && y<180+50){
+                var add_status=1;
+                for(var i=0;i<this.close.length;i+=1){
+                    if(x==this.close[i].x && y==this.close[i].y){
+                        add_status=0;
+                    }
+                }
+                for(var i=0;i<this.open.length;i+=1){
+                    if(x==this.open[i].x && y==this.open[i].y){
+                        add_status=0;
+                    }
+                }
+                if(add_status==1){
+                    this.open.push({"x":x,"y":y,"greed":Math.abs(x-target["x"])+Math.abs(y-target["y"]),"parentX":px,"parentY":py});
+                }
+            }
+    }
+
+    while(true){
+        for(var i=0;i<this.close.length;i+=1){
+            this.check(this.close[i]["x"]-20,this.close[i]["y"],this.close[i]["x"],this.close[i]["y"]);
+            this.check(this.close[i]["x"]+20,this.close[i]["y"],this.close[i]["x"],this.close[i]["y"]);
+            this.check(this.close[i]["x"],this.close[i]["y"]-20,this.close[i]["x"],this.close[i]["y"]);
+            this.check(this.close[i]["x"],this.close[i]["y"]+20,this.close[i]["x"],this.close[i]["y"]);
+        }
+        if (this.open.length==0 && this.close.length != 1){
+            return;
+        }
+        var index=-1;
+        var min=-1;
+        for(var i=0;i<this.open.length;i+=1){
+            if(index==-1 || this.open[i]["greed"]<min){
+                index=i;
+                min=this.open[i]["greed"];
+            }
+        }
+        if(index>-1){
+            var add=this.open.splice(index,1);
+            this.close.push(add[0]);
+            if(add[0]["x"]==target["x"] && add[0]["y"]==target["y"]){
+                break;
+            }
+        }
+    }
+    var rx=target["x"];
+    var ry=target["y"];
+    while(true){
+        var end=0;
+        for(var i=0;i<this.close.length;i+=1){
+            if(this.close[i]["x"]==rx && this.close[i]["y"]==ry){
+                rx=this.close[i]["parentX"];
+                ry=this.close[i]["parentY"];
+                this.result.push({"x":rx,"y":ry});
+                if(this.close[i]["parentX"]==input["x"] && this.close[i]["parentY"]==input["y"]){
+                    end=1;
+                    break;
+                }
+            }
+        }
+        if(end==1){
+            break;
+        }
+    }
+}
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 180;
+        this.canvas.height = 230;
+        this.cellwidth = 20;
+<!--    this.canvas.style.cursor = "none"; //hide the original cursor-->
+
+        this.frameNo = 0;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.interval = setInterval(updateGameArea, 20);
+
+        this.score = 0;
+        this.state = 1;
+
+        this.choose = [];
+        this.move = [];
+
+<!--        window.addEventListener('keydown', function (e) {-->
+<!--          myGameArea.keys = (myGameArea.keys || []);-->
+<!--          myGameArea.keys[e.keyCode] = (e.type == "keydown");-->
+<!--          myGamePiece.image.src = "../static/angry.gif";-->
+<!--        })-->
+<!--        window.addEventListener('keyup', function (e) {-->
+<!--          myGameArea.keys[e.keyCode] = (e.type == "keydown");-->
+<!--          myGamePiece.image.src = "../static/smiley.gif";-->
+<!--        })-->
+
+<!--        window.addEventListener('mousemove', function (e) {-->
+<!--            myGameArea.x = e.pageX;-->
+<!--            myGameArea.y = e.pageY;-->
+<!--        })-->
+        window.addEventListener('mousedown', function (e) {
+          myGameArea.x = e.pageX-10;
+          myGameArea.y = e.pageY-10;
+        })
+        window.addEventListener('mouseup', function (e) {
+          myGameArea.x = false;
+          myGameArea.y = false;
+        })
+
+    },
+
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+
+    stop : function() {
+      clearInterval(this.interval);
+    }
+}
+
+function component(width, height, color, x, y, type) {
+    this.type = type;
+    if (type == "image" || type == "background") {
+        this.image = new Image();
+        this.image.src = color;
+    } else {
+        this.color=color;
+    }
+    this.width = width;
+    this.height = height;
+    this.speedX = 0;
+    this.speedY = 0;
+    this.angle = 0;
+    this.moveAngle = 1;
+    this.x = x;
+    this.y = y;
+    this.light = 10;
+    this.status = 0;
+    this.statex = [];
+    this.statey = [];
+    this.update = function() {
+        ctx = myGameArea.context;
+        if (this.type == "text") {
+          ctx.font = this.width + " " + this.height;
+          ctx.fillStyle = color;
+          ctx.fillText(this.text, this.x, this.y);
+        } else if (type == "background"){
+            ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+        } else if (this.type == "image") {
+            ctx.save();
+            ctx.translate(this.x+5, this.y+5);
+            ctx.rotate(this.angle);
+            ctx.translate(-this.x-5, -this.y-5);
+            ctx.drawImage(this.image,
+            this.x,
+            this.y,
+            this.width, this.height);
+            ctx.restore();
+
+        } else if (this.type == "map") {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.beginPath();
+            for (var j = 0; j < 10; j++) {
+                ctx.moveTo(myGameArea.cellwidth*j, 50);
+                ctx.lineTo(myGameArea.cellwidth*j, 50+myGameArea.cellwidth*9);
+                ctx.moveTo(0, 50+myGameArea.cellwidth*j);
+                ctx.lineTo(myGameArea.cellwidth*9, 50+myGameArea.cellwidth*j);
+            }
+
+            ctx.moveTo(20, 20);
+            ctx.lineTo(20, 40);
+            ctx.moveTo(80, 20);
+            ctx.lineTo(80, 40);
+            ctx.moveTo(20, 20);
+            ctx.lineTo(80, 20);
+            ctx.moveTo(20, 40);
+            ctx.lineTo(80, 40);
+
+            ctx.strokeStyle = "#555"; // 线的颜色
+            ctx.stroke();             // 绘制
+            ctx.restore();
+
+        } else if (this.type == "ball") {
+            ctx.save();
+            ctx.translate(0, 0);
+            ctx.beginPath();
+            var gradient = ctx.createRadialGradient(this.x - 5, this.y - 5, 0, this.x, this.y, this.light);
+            gradient.addColorStop(0, "white"); // 规定 gradient 对象中的颜色和位置。
+            gradient.addColorStop(1, color);
+            ctx.arc(this.x, this.y, 10, 0, Math.PI * 2); // 创建圆形：圆心x坐标，圆心y坐标，圆半径，开始角，结束角
+            ctx.strokeStyle = color; // 设置笔触颜色
+            ctx.fillStyle = gradient; // 设置填充绘图的渐变对象
+            ctx.fill();  //内部填充
+            ctx.stroke(); //轮廓绘制
+            ctx.restore();
+
+        } else {
+          ctx.fillStyle = color;
+          ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+    this.newPos = function() {
+        this.x += this.speedX;
+        if (this.type == "background") {
+            this.y += this.speedY;
+            if (this.x == -(this.width-200)) {
+                this.x = 0;
+            }
+        } else {
+          this.angle += this.moveAngle * Math.PI / 180;
+          this.y += this.speedY;
+        }
+    }
+
+    this.isUp=true;
+    this.flash = function() {
+        if (this.isUp) {
+            this.light += 3;
+        }
+        if (!this.isUp) {
+            this.light -= 3;
+        }
+        if(this.light >= 30){
+            this.isUp=false;
+        }
+        if(this.light <= 10){
+            this.isUp=true;
+        }
+    }
+    this.stopFlash = function() {
+        this.isUp=true;
+        this.light=10;
+    }
+}
+
+function getScore() {
+    if(myGameArea.choose.length>0){
+        myGameArea.choose.shift();
+    }
+    var open=[];
+    var close=[];
+    for (var j = 0; j < myObstacles.length; j++) {
+        open=[j];
+        var mx=myObstacles[j].x-20;
+        var my=myObstacles[j].y;
+        var index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            mx -=20;
+            index=checkBall(mx,my);
+        }
+        mx=myObstacles[j].x+20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            mx +=20;
+            index=checkBall(mx,my);
+        }
+        if(open.length>=3){
+            for(var i=0;i<open.length;i+=1){
+                if(-1==close.indexOf(open[i])){
+                    close.push(open[i]);
+                }
+            }
+        }
+        open=[j];
+        mx = myObstacles[j].x;
+        my = myObstacles[j].y-20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            my -=20;
+            index=checkBall(mx,my);
+        }
+        my = myObstacles[j].y+20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            my +=20;
+            index=checkBall(mx,my);
+        }
+        if(open.length>=3){
+            for(var i=0;i<open.length;i+=1){
+                if(-1==close.indexOf(open[i])){
+                    close.push(open[i]);
+                }
+            }
+        }
+        open=[j];
+        my = myObstacles[j].y-20;
+        mx = myObstacles[j].x-20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            my -=20;
+            mx -=20;
+            index=checkBall(mx,my);
+        }
+        my = myObstacles[j].y+20;
+        mx = myObstacles[j].x+20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            my +=20;
+            mx +=20;
+            index=checkBall(mx,my);
+        }
+        if(open.length>=3){
+            for(var i=0;i<open.length;i+=1){
+                if(-1==close.indexOf(open[i])){
+                    close.push(open[i]);
+                }
+            }
+        }
+        open=[j];
+        my = myObstacles[j].y-20;
+        mx = myObstacles[j].x+20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            my -=20;
+            mx +=20;
+            index=checkBall(mx,my);
+        }
+        my = myObstacles[j].y+20;
+        mx = myObstacles[j].x-20;
+        index=checkBall(mx,my);
+        while(index!=-1){
+            if(myObstacles[j].color==myObstacles[index].color){
+                open.push(index);
+            } else {
+                break;
+            }
+            my +=20;
+            mx -=20;
+            index=checkBall(mx,my);
+        }
+        if(open.length>=3){
+            for(var i=0;i<open.length;i+=1){
+                if(-1==close.indexOf(open[i])){
+                    close.push(open[i]);
+                }
+            }
+        }
+        open=[j];
+    }
+    if(close.length>0){
+        close.sort((a,b)=>{return b-a});
+        for(var j=0;close.length>j;j+=1){
+            myObstacles.splice(close[j],1)
+        }
+        myGameArea.score+=10;
+    }
+
+}
+
+function updateGameArea() {
+    myGameArea.clear();
+    myMap.update();
+<!--    myBall.update();-->
+    for (var j = 0; j < myShuffleBalls.length; j++) {
+        myShuffleBalls[j].update();
+    }
+
+    if (myGameArea.x && myGameArea.y && myGameArea.move.length<2) {
+        var click=checkBall(myGameArea.x,myGameArea.y);
+        if(myGameArea.choose.length!=0){
+            if(myGameArea.x!=myGameArea.choose[0]["x"] && myGameArea.y!=myGameArea.choose[0]["y"]){
+                myObstacles[checkBall(myGameArea.choose[0]["x"],myGameArea.choose[0]["y"])].stopFlash();
+                if(click!=-1){
+                    myGameArea.choose.push({"x":myObstacles[click].x,"y":myObstacles[click].y})
+                } else {
+                    var mx = Math.ceil(myGameArea.x/20)*20-10;
+                    var my = Math.ceil((myGameArea.y-50)/20)*20+40;
+                    var dijk = new dijkstra({"x":myGameArea.choose[0]["x"],"y":myGameArea.choose[0]["y"]},{"x":mx,"y":my});
+                    myGameArea.move = dijk.result;
+                    if(myGameArea.move.length>1){
+                    mapBall(mx,my);
+                    shuffleBall();}
+                }
+                myGameArea.choose.shift();
+            }
+        } else {
+            if(click!=-1){
+                myGameArea.choose.push({"x":myObstacles[click].x,"y":myObstacles[click].y})
+            }
+        }
+    }
+
+    if(myGameArea.choose.length>0){
+        myObstacles[checkBall(myGameArea.choose[0]["x"],myGameArea.choose[0]["y"])].flash();
+    }
+<!--    console.log(myGameArea.move);-->
+    if(myGameArea.move.length>1){
+        var indexNow=checkBall(myGameArea.move[myGameArea.move.length-1]["x"],myGameArea.move[myGameArea.move.length-1]["y"]);
+        myObstacles[indexNow].x=myGameArea.move[myGameArea.move.length-2]["x"];
+        myObstacles[indexNow].y=myGameArea.move[myGameArea.move.length-2]["y"];
+        myGameArea.move.pop();
+        if(myGameArea.move.length<=1){
+            getScore();
+        }
+    }
+
+    if(myObstacles.length>=79){
+        myGameArea.stop();
+        return;
+    }
+
+    for (var j = 0; j < myObstacles.length; j++) {
+        myObstacles[j].update();
+    }
+
+    myScore.text="SCORE: " + myGameArea.score;
+    myScore.update();
+
+}
+
+function restart() {
+<!--          myBackground.speedX = 0;-->
+<!--          myBackground.speedY = 0;-->
+<!--          myBackground.x = 0;-->
+<!--          myBackground.y = 0;-->
+
+          myGameArea.frameNo = 0;
+          myGameArea.score = 0;
+
+          myObstacles=[];
+          myShuffleBalls=[];
+
+          myGameArea.stop();
+          myGameArea.interval = setInterval(updateGameArea, 20);
+          myGameArea.state = 1;
+
+          shuffleBall();
+          mapBall(-1,-1);
+          shuffleBall();
+}
+
+function stop() {
+          if(myGameArea.state == 1){
+            myGameArea.stop();
+            myGameArea.state = 0;
+          }
+}
+
+function start() {
+          if(myGameArea.state == 0){
+            myGameArea.interval = setInterval(updateGameArea, 20);
+            myGameArea.state = 1;
+           }
+}
+</script>
+<br>
+<button onclick="start()">start</button>
+<button onclick="stop()">stop</button>
+<button onclick="restart()">restart</button>
+</body>
+</html>
+
+
