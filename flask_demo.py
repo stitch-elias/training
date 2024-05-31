@@ -15,7 +15,7 @@ else:
     db = {}
 
 @app.route("/")
-def get():
+def init():
     username = flask.request.cookies.get("id")
     if username!=None:
         if "id" not in flask.session.keys() and flask.session["state"]=="login":
@@ -23,26 +23,26 @@ def get():
     return flask.render_template("index.html")
 
 @app.route("/aa")
-def getaa():
+def recognize_number():
     if "id" in flask.session.keys() and flask.session["state"] == "login":
         return flask.render_template("aa.html")
     else:
-        return flask.redirect(flask.url_for("get"))
+        return flask.redirect(flask.url_for("init"))
 
 
 @app.route("/bb")
-def getbb():
+def up_file():
     if "id" in flask.session.keys() and flask.session["state"] == "login":
         return flask.render_template("bb.html")
     else:
-        return flask.redirect(flask.url_for("get"))
+        return flask.redirect(flask.url_for("init"))
 
 @app.route("/cc")
-def getcc():
+def recognize_person():
     if "id" in flask.session.keys() and flask.session["state"] == "login":
         return flask.render_template("cc.html")
     else:
-        return flask.redirect(flask.url_for("get"))
+        return flask.redirect(flask.url_for("init"))
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
@@ -60,7 +60,7 @@ def upload_file():
 
 
 @app.route("/img",methods=["POST"])
-def getaimg():
+def get_img():
     file = flask.request.form
     print(file['singlefile'])
     img = cv2.imdecode(np.frombuffer(base64.b64decode(file['singlefile'].split(',')[1]),np.uint8),cv2.IMREAD_COLOR)
@@ -72,7 +72,7 @@ def getaimg():
 def login():
     name = flask.request.form["n"]
     password = flask.request.form["p"]
-    response = flask.redirect(flask.url_for("get"))
+    response = flask.redirect(flask.url_for("init"))
     if name in db.keys() and db[name]==password:
         flask.session["id"]=name
         flask.session["state"]="login"
@@ -83,7 +83,7 @@ def login():
 def logup():
     name = flask.request.form["n"]
     password = flask.request.form["p"]
-    response = flask.redirect(flask.url_for("get"))
+    response = flask.redirect(flask.url_for("init"))
     db[name]=password
     flask.session["id"]=name
     flask.session["state"]="login"
@@ -94,7 +94,7 @@ def logup():
 def logout():
     flask.session.pop("id")
     flask.session["state"]="logout"
-    return flask.redirect(flask.url_for("get"))
+    return flask.redirect(flask.url_for("init"))
 
 def parsing(img):
     # img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
