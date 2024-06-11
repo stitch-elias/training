@@ -1,6 +1,10 @@
   #!/bin/sh
 
+	logFile="./stop.log"
+	echo "TWS service started by PID $$" >> "$logFile"
+
     while :
+
 
     do
 
@@ -21,6 +25,7 @@
 
     fi
 
-    sleep 3
+    sleep 0.5
 
     done
+
